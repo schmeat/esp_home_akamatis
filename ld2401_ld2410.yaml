@@ -1,6 +1,7 @@
 substitutions:
   device_name: akamatis-presence-sensor
   friendly_name: Akamatis Presence Sensor
+  esp32_boot_pin: 9
   esp32_tx_pin: GPIO21
   esp32_rx_pin: GPIO20
 
@@ -11,7 +12,7 @@ esphome:
   name_add_mac_suffix: True
   project: 
     name: Akamatis.HumanPresenceSensor
-    version: "1.0"
+    version: "1.1"
 
 esp32:
   board: esp32-c3-devkitm-1
@@ -19,6 +20,7 @@ esp32:
     type: esp-idf
 
 logger:
+  level: INFO
 
 api:
 
@@ -29,8 +31,10 @@ ota:
 wifi:
   ssid: "Your Wi-Fi SSID"
   password: "Wi-Fi Password"
-  power_save_mode: LIGHT
+  power_save_mode: NONE
   reboot_timeout: 10min
+  id: wifi_comp
+
   ap:
     ssid: "${friendly_name} Hotspot"
     password: ""
@@ -61,6 +65,28 @@ select:
       name: out pin level
 
 binary_sensor:
+  # Pressing the boot button will activate wifi hotspot within 10 sec
+  # instead of waiting for the default 60 seconds.
+  - platform: gpio
+    pin:
+      number: ${esp32_boot_pin}
+      mode: INPUT_PULLUP
+      inverted: true # Most boot buttons are active low
+    name: "Boot Button"
+    id: boot_button
+    internal: True
+    on_click:
+      min_length: 3000ms
+      max_length: 10000ms
+      then:
+        - logger.log: "Manually activating wifi hotspot: ..."
+        - lambda: |-
+            id(wifi_comp).set_ap_timeout(1);
+            id(wifi_comp).disable();
+            id(wifi_comp).clear_sta();
+            id(wifi_comp).enable();
+        - logger.log: "Manually activating wifi hotspot: done"
+
   - platform: ld2410
     has_target:
       name: Presence
@@ -198,4 +224,3 @@ number:
         name: g8 move threshold
       still_threshold:
         name: g8 still threshold
-
