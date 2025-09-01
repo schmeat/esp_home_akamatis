@@ -11,12 +11,15 @@ esphome:
   name_add_mac_suffix: True
   project: 
     name: Akamatis.HumanPresenceSensor
-    version: "1.0"
+    version: "1.1"
 
 esp32:
   board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
 
 logger:
+  level: INFO
 
 api:
 
@@ -27,7 +30,7 @@ ota:
 wifi:
   ssid: "Your Wi-Fi SSID"
   password: "Wi-Fi Password"
-  power_save_mode: LIGHT
+  power_save_mode: NONE
   reboot_timeout: 10min
   ap:
     ssid: "${friendly_name} Hotspot"
@@ -45,7 +48,6 @@ uart:
 
 ld2410:
   uart_id: ld2410_uart
-  throttle: 200ms
   id: ld2410_comp
 
 select:
@@ -215,4 +217,3 @@ number:
         name: g8 move threshold
       still_threshold:
         name: g8 still threshold
-
