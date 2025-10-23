@@ -19,20 +19,20 @@ namespace ZoneConstants {
 }
 
 // Position data structure for detected targets
-struct Position {
-    int16_t x = 0; 
-    int16_t y = 0;
-    int16_t speed = 0;
-    int16_t distance_resolution = 0;
-    bool valid = false;  // Changed from 'valide' for correct English
-    bool zone_ex_enter = false;
-    float angle = 0.0f;
-    std::string position = "Static";
-    std::string direction = "None";
-    
-    // Calculate distance from origin
-    float getDistance() const {
-        return std::sqrt(static_cast<float>(x * x + y * y));
+    struct Position {
+        int16_t x = 0; 
+        int16_t y = 0;
+        int16_t speed = 0;
+        uint16_t distance_resolution = 0;
+        bool valid = false;  // Changed from 'valide' for correct English
+        bool zone_ex_enter = false;
+        float angle = 0.0f;
+        std::string position = "Static";
+        std::string direction = "None";
+        
+        // Calculate distance from origin
+        float getDistance() const {
+            return std::sqrt(static_cast<float>(x * x + y * y));
     }
     
     // Check if position is within valid bounds

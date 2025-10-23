@@ -45,7 +45,25 @@ void process_ld2450_data(
     const int NUM_ZONES_EX = 1;
     const int NUM_TARGETS = 3;
     const int MIN_PACKET_SIZE = 30;
-    
+    const int EXPECTED_PACKET_SIZE = 48;
+    static std::vector<uint8_t> packet_buffer;
+
+    // Append new bytes to buffer
+    packet_buffer.insert(packet_buffer.end(), bytes.begin(), bytes.end());
+
+    // Only process if we have at least a full packet
+    const int FULL_PACKET_SIZE = 48;
+    if (packet_buffer.size() < FULL_PACKET_SIZE) {
+        // Not enough data yet; exit and wait for next update
+        return;
+    }
+
+    // Take first full packet for processing
+    std::vector<uint8_t> packet(packet_buffer.begin(), packet_buffer.begin() + FULL_PACKET_SIZE);
+
+    // Remove the processed bytes from the buffer
+    packet_buffer.erase(packet_buffer.begin(), packet_buffer.begin() + FULL_PACKET_SIZE);
+
     unsigned long current_time = millis();
     if ((current_time - last_update) <= update_interval_ms->state) { 
         return;
@@ -59,7 +77,7 @@ void process_ld2450_data(
         update_counter = 0;
         last_rate_calc = current_time;
     }
-    
+
     if (bytes.size() < MIN_PACKET_SIZE) {
         packet_error_count = packet_error_count + 1;
         packet_errors->publish_state(packet_error_count);
@@ -78,6 +96,7 @@ void process_ld2450_data(
     // Parse target data
     int b = 0;
     for (int i = 0; i < NUM_TARGETS; i++) {
+        // Parse X coordinate
         p[i].x = (uint16_t((bytes[b+5] << 8) | bytes[b+4]));
         if ((bytes[b+5] & 0x80) >> 7) {
             p[i].x -= 32768;
@@ -85,14 +104,16 @@ void process_ld2450_data(
             p[i].x = 0 - p[i].x;
         }
         p[i].x = p[i].x * -1;
-
+    
+        // Parse Y coordinate
         p[i].y = (uint16_t((bytes[b+7] << 8) | bytes[b+6]));
         if ((bytes[b+7] & 0x80) >> 7) {
             p[i].y -= 32768;
         } else {
             p[i].y = 0 - p[i].y;
         }
-
+    
+        // Parse speed
         p[i].speed = (bytes[b+9] << 8 | bytes[b+8]);
         if ((bytes[b+9] & 0x80) >> 7) {
             p[i].speed -= 32768;
@@ -100,10 +121,16 @@ void process_ld2450_data(
             p[i].speed = 0 - p[i].speed;
         }
         
+        // Parse distance resolution - THIS IS UNSIGNED, NO SIGN CONVERSION
         p[i].distance_resolution = (uint16_t((bytes[b+11] << 8) | bytes[b+10]));
+        
+        // Target is valid if it has non-zero coordinates or positive Y
         p[i].valid = (p[i].x != 0 || p[i].y > 0);
+        
+        // Reset exclusion flag
         p[i].zone_ex_enter = false;
-        b += 8;
+        
+        b += 8; // Move to next target data block
     }
     
     // Process exclusion zones
@@ -174,36 +201,33 @@ void process_ld2450_data(
     }
 
     // Publish target data
-    if (target_fn_enable->state) {
+    if (id(target_fn_enable).state) {
         for (int i = 0; i < NUM_TARGETS; i++) {
-            if (abs(target_x[i]->state - p[i].x) > pos_threshold) {
+            if (p[i].valid) {
+                // Always publish for valid targets (for debugging)
                 target_x[i]->publish_state(p[i].x);
-            }
-            if (abs(target_y[i]->state - p[i].y) > pos_threshold) {
                 target_y[i]->publish_state(p[i].y);
-            }
-            
-            float speed_ms = p[i].speed / 100.0f;
-            if (abs(target_speed[i]->state - speed_ms) > speed_thresh) {
+                
+                float speed_ms = p[i].speed / 100.0f;
                 target_speed[i]->publish_state(speed_ms);
-            }
-            
-            if (target_resolution[i]->state != p[i].distance_resolution) {
+                
                 target_resolution[i]->publish_state(p[i].distance_resolution);
-            }
-            
-            if (abs(target_angle[i]->state - p[i].angle) > 1.0) {
                 target_angle[i]->publish_state(p[i].angle);
-            }
-            
-            if (target_position[i]->state != p[i].position) {
                 target_position[i]->publish_state(p[i].position);
-            }
-            if (target_direction[i]->state != p[i].direction) {
                 target_direction[i]->publish_state(p[i].direction);
+            } else {
+                // Publish 0 for invalid targets
+                target_x[i]->publish_state(0);
+                target_y[i]->publish_state(0);
+                target_speed[i]->publish_state(0);
+                target_angle[i]->publish_state(0);
             }
         }
     }
+    
+    ESP_LOGD("ld2450", "T1: valid=%d x=%d y=%d speed=%d", p[0].valid, p[0].x, p[0].y, p[0].speed);
+    ESP_LOGD("ld2450", "T2: valid=%d x=%d y=%d speed=%d", p[1].valid, p[1].x, p[1].y, p[1].speed);
+    ESP_LOGD("ld2450", "T3: valid=%d x=%d y=%d speed=%d", p[2].valid, p[2].x, p[2].y, p[2].speed);
 
     // Publish overall presence
     if (all_target_count->state != all_target_counts) {
